@@ -1,0 +1,11 @@
+.data/
+data/
+secrets.env
+mcporter.json
+ha-secrets-fragment.yaml
+worker-token.txt
+*.lock
+*.tmp
+__pycache__/
+*.pyc
+.DS_Store
