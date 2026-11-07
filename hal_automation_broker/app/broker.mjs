@@ -86,6 +86,11 @@ export class FileProposalStore {
 }
 
 export class AutomationApprovalBroker {
+  proposalReceipt(p){
+    const ticketData={id:p.id,contentHash:p.contentHash,sessionKey:p.sessionKey,nonce:p.nonce,expiresAt:p.expiresAt};
+    const body=b64(ticketData), approvalTicket=body+'.'+createHmac('sha256',this.secret).update(body).digest('base64url');
+    return Object.freeze({proposalId:p.id,contentHash:p.contentHash,approvalTicket,expiresAt:p.expiresAt,operation:p.operation,targetEntityId:p.targetEntityId,risk:p.risk,config:clone(p.config)});
+  }
   constructor({store,api,secret,verifyDisplayedProposal=async()=>false,now=()=>Date.now(),ttlMs=120000,pilotSafeOnly=false}){
     if(!store||!api||typeof api.getAutomation!=='function'||typeof api.setAutomation!=='function'||typeof api.entityExists!=='function')throw new TypeError('Narrow automation API required.');
     if(!Buffer.isBuffer(secret)||secret.length<32)throw new TypeError('32-byte signing key required.');
@@ -108,9 +113,25 @@ export class AutomationApprovalBroker {
     for(const id of refsOf(safe))if(await this.api.entityExists(id)!==true)throw new BrokerError('INVALID_REFERENCE','Entity reference not confirmed.');
     const id=randomUUID(), contentHash=hash(canon({operation,targetEntityId,config:safe})), expiresAt=this.now()+this.ttlMs;
     const ticketData={id,contentHash,sessionKey:ctx.sessionKey,nonce:randomBytes(24).toString('base64url'),expiresAt};
-    const body=b64(ticketData), ticket=body+'.'+createHmac('sha256',this.secret).update(body).digest('base64url');
-    await this.store.transact(s=>{s.proposals[id]={id,contentHash,operation,targetEntityId,config:safe,risk:riskOf(safe),sessionKey:ctx.sessionKey,nonce:ticketData.nonce,expiresAt,status:'pending',old:old?{config:clone(old.config),config_hash:old.config_hash,enabled:old.enabled}:null,createdAt:this.now(),idempotencyKey:typeof ctx.idempotencyKey==='string'?ctx.idempotencyKey:null};});
-    return Object.freeze({proposalId:id,contentHash,approvalTicket:ticket,expiresAt,operation,targetEntityId,risk:riskOf(safe),config:clone(safe)});
+    const fingerprint=hash(canon({operation,targetEntityId,config:safe,sessionKey:ctx.sessionKey}));
+    return this.store.transact(s=>{
+      if(typeof ctx.idempotencyKey==='string'&&ctx.idempotencyKey){
+        if(!isObj(s.idempotency))s.idempotency={};
+        const key=hash(JSON.stringify([ctx.agentId,ctx.sessionKey,ctx.idempotencyKey])), prior=s.idempotency[key];
+        if(prior){
+          if(prior.fingerprint!==fingerprint)throw new BrokerError('IDEMPOTENCY_KEY_REUSED','Idempotency key was already used for a different proposal.');
+          const existing=s.proposals[prior.proposalId];
+          if(!existing)throw new BrokerError('STORE_UNAVAILABLE','Idempotency record references a missing proposal.');
+          return this.proposalReceipt(existing);
+        }
+        const p={id,contentHash,operation,targetEntityId,config:safe,risk:riskOf(safe),sessionKey:ctx.sessionKey,nonce:ticketData.nonce,expiresAt,status:'pending',old:old?{config:clone(old.config),config_hash:old.config_hash,enabled:old.enabled}:null,createdAt:this.now(),idempotencyKey:ctx.idempotencyKey};
+        s.proposals[id]=p;s.idempotency[key]={fingerprint,proposalId:id};
+        return this.proposalReceipt(p);
+      }
+      const p={id,contentHash,operation,targetEntityId,config:safe,risk:riskOf(safe),sessionKey:ctx.sessionKey,nonce:ticketData.nonce,expiresAt,status:'pending',old:old?{config:clone(old.config),config_hash:old.config_hash,enabled:old.enabled}:null,createdAt:this.now(),idempotencyKey:null};
+      s.proposals[id]=p;
+      return this.proposalReceipt(p);
+    });
   }
   async approveFromHa({proposalId,contentHash,approver,validatedByHa=false}) {
     if (validatedByHa !== true) throw new BrokerError('VALIDATION_REQUIRED','HA Core validation is required before approval.');
