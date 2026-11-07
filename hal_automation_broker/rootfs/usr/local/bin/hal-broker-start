@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+fail() { printf '[hal-broker] ERROR: %s\n' "$1" >&2; exit 1; }
+[ -r /config/secrets.env ] || fail 'Missing /config/secrets.env; run guarded provisioning.'
+[ -r /config/mcporter.json ] || fail 'Missing dedicated /config/mcporter.json.'
+set -a; . /config/secrets.env; set +a
+for name in HAL_BROKER_WORKER_TOKEN HAL_BROKER_HA_TOKEN HAL_BROKER_HMAC_KEY HAL_MCP_BASE_URL HAL_MCP_TOKEN HAL_MCP_AUTH_HEADER; do
+  [ -n "${!name:-}" ] || fail "Missing required config field: ${name}"
+done
+[ "$HAL_BROKER_WORKER_TOKEN" != "$HAL_BROKER_HA_TOKEN" ] || fail 'Worker and HA broker credentials must be distinct.'
+[ "$HAL_MCP_TOKEN" != "$HAL_BROKER_HA_TOKEN" ] || fail 'MCP and HA broker credentials must be distinct.'
+[ "$HAL_MCP_TOKEN" != "$HAL_BROKER_WORKER_TOKEN" ] || fail 'MCP and worker credentials must be distinct.'
+export HAL_BROKER_ALLOW_WRITES=0 HAL_BROKER_BIND=0.0.0.0 HAL_BROKER_PORT=8765
+export HAL_BROKER_STORE=/data/proposals.json HAL_BROKER_MCP_CONFIG=/config/mcporter.json
+mkdir -p /data; chmod 0700 /data
+if ! mcporter --config "$HAL_BROKER_MCP_CONFIG" list home-assistant --schema --json >/tmp/mcp-schema.json 2>/dev/null; then
+ fail 'MCP endpoint/schema preflight failed; credentials were not logged.'
+fi
+node -e 'const d=require("/tmp/mcp-schema.json");const n=(d.tools||[]).map(x=>x.name);for(const x of ["ha_config_get_automation","ha_search"])if(!n.includes(x))process.exit(2)' 2>/dev/null || fail 'MCP endpoint lacks required read-only tools.'
+rm -f /tmp/mcp-schema.json
+printf '[hal-broker] Starting read-only listener on container port 8765; journal at /data/proposals.json\n'
+exec node /app/http-server.mjs

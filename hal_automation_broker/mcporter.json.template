@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "home-assistant": {
+      "baseUrl": "${HAL_MCP_BASE_URL}",
+      "headers": {
+        "Authorization": "$env:HAL_MCP_AUTH_HEADER"
+      }
+    }
+  }
+}

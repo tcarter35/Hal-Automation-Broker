@@ -1,0 +1,17 @@
+name: Hal Automation Broker
+slug: hal_automation_broker
+version: "0.3.0-ha-app.1"
+description: Isolated, default-read-only proposal broker for Home Assistant approvals.
+url: https://github.com/tcarter35/Hal-Automation-Broker
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: application
+boot: manual
+init: false
+map:
+  - type: addon_config
+    read_only: true
+options: {}
+schema: {}

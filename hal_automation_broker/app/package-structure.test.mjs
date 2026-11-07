@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+const app=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+test('manifest, build args, network exposure, storage, and startup are correctly packaged',async()=>{
+ const c=await readFile(resolve(app,'config.yaml'),'utf8');
+ assert.match(c,/^slug: hal_automation_broker$/m);
+ assert.match(c,/^version: "[^"]+"$/m);
+ for(const a of ['amd64','aarch64','armv7']) assert.match(c,new RegExp('^  - '+a+'$','m'));
+ assert.doesNotMatch(c,/^(ports|host_network|ingress):/m);
+ assert.match(c,/type: addon_config\n    read_only: true/);
+ const b=await readFile(resolve(app,'build.yaml'),'utf8');
+ assert.match(b,/^args:\n  BUILD_FROM: ghcr\.io\/home-assistant\/\{arch\}-base:/m);
+ const d=await readFile(resolve(app,'Dockerfile'),'utf8');
+ for(const x of ['COPY app/authz.mjs','COPY rootfs/','HEALTHCHECK','http://127.0.0.1:8765/healthz']) assert.ok(d.includes(x),x);
+ const start=await readFile(resolve(app,'rootfs/usr/local/bin/hal-broker-start'),'utf8');
+ for(const x of ['HAL_BROKER_ALLOW_WRITES=0','HAL_BROKER_STORE=/data/proposals.json','HAL_BROKER_MCP_CONFIG=/config/mcporter.json']) assert.ok(start.includes(x),x);
+});
