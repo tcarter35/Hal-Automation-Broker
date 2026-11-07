@@ -12,10 +12,10 @@ Create the **private** file `secrets.env` there with these four values:
 HAL_BROKER_WORKER_TOKEN=REPLACE_WITH_FRESH_RANDOM_SECRET
 HAL_BROKER_HA_TOKEN=REPLACE_WITH_DIFFERENT_FRESH_RANDOM_SECRET
 HAL_BROKER_HMAC_KEY=REPLACE_WITH_BASE64_32_BYTE_RANDOM_SECRET
-HAL_MCP_BASE_URL=http://HOME_ASSISTANT_IP:9583/private_YOUR_SECRET_PATH
+HAL_MCP_BASE_URL=http://HOME_ASSISTANT_IP:9583/YOUR_ACTUAL_PRIVATE_ENDPOINT_PATH
 ```
 
-The full `HAL_MCP_BASE_URL` comes from the **Home Assistant MCP Server app logs** and is itself a credential. **Never paste it in GitHub, chat, or logs.** This MCP app authenticates with the secret URL; a Bearer header and `HAL_MCP_TOKEN` are **not required**. The broker generates its private MCPorter configuration at runtime. An old `mcporter.json` in the app config directory is ignored by this version.
+The full `HAL_MCP_BASE_URL` (including the exact secret path, which may be customized and need not start with `/private_`) comes from the **Home Assistant MCP Server app logs** and is itself a credential. **Never paste it in GitHub, chat, or logs.** This MCP app authenticates with the secret URL; a Bearer header and `HAL_MCP_TOKEN` are **not required**. The broker generates its private MCPorter configuration at runtime. An old `mcporter.json` in the app config directory is ignored by this version.
 
 For security, use a dedicated least-privilege MCP identity when available. The broker's MCPorter call allowlist contains only `ha_search` and `ha_config_get_automation`, but this does not reduce the underlying MCP server's own permissions. Do not expose this server outside your trusted network.
 
