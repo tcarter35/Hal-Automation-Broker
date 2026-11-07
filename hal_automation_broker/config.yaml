@@ -1,6 +1,6 @@
 name: Hal Automation Broker
 slug: hal_automation_broker
-version: "0.3.0-ha-app.2"
+version: "0.3.0-ha-app.3"
 description: Isolated, default-read-only proposal broker for Home Assistant approvals.
 url: https://github.com/tcarter35/Hal-Automation-Broker
 arch:
