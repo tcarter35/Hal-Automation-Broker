@@ -1,23 +1,30 @@
 # Hal Automation Broker — Home Assistant app repository
 
-Standalone repository packaging of the existing broker. Startup forces `HAL_BROKER_ALLOW_WRITES=0`; approval/apply requests remain blocked with `423 WRITE_DISABLED`. No host port or ingress is declared. Proposals persist at `/data/proposals.json`.
+Read-only proposal broker for Home Assistant. Writes are hard-disabled on startup with `HAL_BROKER_ALLOW_WRITES=0`; approval/apply requests return `423 WRITE_DISABLED`. No host port or ingress is declared. Proposals persist at `/data/proposals.json`.
 
-## Layout and build
+## Install and connect
 
-The repository root contains `repository.yaml`; Supervisor's Docker build context is `hal_automation_broker/`. Its Dockerfile copies `app/` and `rootfs/` from this context. `build.yaml` uses current `args.BUILD_FROM` with the architecture placeholder, not deprecated `build_from`. Architectures are amd64, aarch64, and legacy armv7, matching the existing image bases.
+Install through the Home Assistant app repository. Its app configuration directory is `app_configs/<app-id>/` (the installed ID may be `local_hal_automation_broker` for a local install).
 
-Replace the URL and maintainer placeholders in `repository.yaml` before publishing. No push was performed.
+Create the **private** file `secrets.env` there with these four values:
 
-## Security and storage
+```dotenv
+HAL_BROKER_WORKER_TOKEN=REPLACE_WITH_FRESH_RANDOM_SECRET
+HAL_BROKER_HA_TOKEN=REPLACE_WITH_DIFFERENT_FRESH_RANDOM_SECRET
+HAL_BROKER_HMAC_KEY=REPLACE_WITH_BASE64_32_BYTE_RANDOM_SECRET
+HAL_MCP_BASE_URL=http://HOME_ASSISTANT_IP:9583/private_YOUR_SECRET_PATH
+```
 
-The broker binds `0.0.0.0:8765` only inside the private app network. `ports`, `host_network`, and `ingress` are absent. Only the app `addon_config` directory is mapped read-only at `/config`; there is no Core API, Supervisor API, Docker socket, or host access. Credentials and the live MCP config are excluded; `mcporter.json.template` is not a credential.
+The full `HAL_MCP_BASE_URL` comes from the **Home Assistant MCP Server app logs** and is itself a credential. **Never paste it in GitHub, chat, or logs.** This MCP app authenticates with the secret URL; a Bearer header and `HAL_MCP_TOKEN` are **not required**. The broker generates its private MCPorter configuration at runtime. An old `mcporter.json` in the app config directory is ignored by this version.
 
-After registration, provision distinct worker, HA-integration, and MCP credentials into the app config directory using the guarded provisioning procedure from the original source distribution. Use a dedicated least-privilege MCP identity, never the OpenClaw credential or an HA administrator token. Provisioning suppresses token echo and writes private files. Confirm the actual internal hostname from Home Assistant Core before configuring clients.
+For security, use a dedicated least-privilege MCP identity when available. The broker's MCPorter call allowlist contains only `ha_search` and `ha_config_get_automation`, but this does not reduce the underlying MCP server's own permissions. Do not expose this server outside your trusted network.
 
 ## Startup and health
 
-S6 runs `rootfs/etc/services.d/hal_automation_broker/run`, which invokes `rootfs/usr/local/bin/hal-broker-start`. Missing private files or required read-only MCP tools produce a concise startup error without secret values. Docker healthcheck probes `/healthz` over container loopback; it is liveness-only.
+S6 runs `rootfs/etc/services.d/hal_automation_broker/run`. Startup checks the required secrets and read-only MCP tool schema. Errors do not print the secret URL. Docker healthcheck probes `/healthz` over container loopback.
+
+App root contains `Dockerfile`, `config.yaml`, `build.yaml`, `app/` and `rootfs/`. The container has no Docker socket, HA Core API, Supervisor API, host-network access, exposed port, or ingress. The app's private configuration folder is mapped read-only to `/config`.
 
 ## Verification
 
-Run source regressions with `npm test` in the original source checkout and package smoke checks in the source distribution. Build using official Home Assistant app tooling on each target architecture before publishing. Image build and actual Supervisor hostname require validation in the HA installation.
+Source and isolated package smoke tests are provided. Docker build and live Supervisor integration require testing on a Home Assistant installation. **Installing this app does not enable real automation creation.**
