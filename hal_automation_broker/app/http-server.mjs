@@ -45,7 +45,7 @@ const server=http.createServer(async(req,res)=>{
   }
   return json(res,404,{error:'NOT_FOUND'});
  } catch(e) {
-  const code=e.code||'REQUEST_FAILED',status=({AUTH_REQUIRED:403,HA_ADMIN_REQUIRED:403,REPLAY_OR_STALE:409,STALE_TARGET:409,EXPIRED:410,WRITE_DISABLED:423,VALIDATION_REQUIRED:422,PILOT_POLICY:422})[code]||400;
+  const code=e.code||'REQUEST_FAILED',status=({AUTH_REQUIRED:403,HA_ADMIN_REQUIRED:403,REPLAY_OR_STALE:409,STALE_TARGET:409,IDEMPOTENCY_KEY_REUSED:409,EXPIRED:410,WRITE_DISABLED:423,VALIDATION_REQUIRED:422,PILOT_POLICY:422})[code]||400;
   return json(res,status,{error:code,message:e.message||'Request failed'});
  }
 });
