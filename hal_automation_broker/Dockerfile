@@ -2,7 +2,7 @@ ARG BUILD_FROM
 FROM ${BUILD_FROM}
 RUN apk add --no-cache nodejs npm bash curl \
     && npm install --global --omit=dev mcporter@0.12.3 \
-    && node --version | grep -E '^v(20|22)\.'
+    && node --version
 COPY app/authz.mjs app/broker.mjs app/ha-mcp-adapter.mjs app/http-server.mjs app/mcporter-invoker.mjs app/package.json /app/
 COPY rootfs/ /
 RUN chmod 0755 /usr/local/bin/hal-broker-start /etc/services.d/hal_automation_broker/run \
