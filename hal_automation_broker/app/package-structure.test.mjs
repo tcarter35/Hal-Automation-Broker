@@ -18,5 +18,5 @@ test('manifest, build args, network exposure, storage, and startup are correctly
  const start=await readFile(resolve(app,'rootfs/usr/local/bin/hal-broker-start'),'utf8');
  for(const x of ['HAL_BROKER_ALLOW_WRITES=0','HAL_BROKER_STORE=/data/proposals.json','HAL_BROKER_MCP_CONFIG=/tmp/hal-mcporter.json']) assert.ok(start.includes(x),x);
  assert.doesNotMatch(start,/HAL_MCP_AUTH_HEADER|HAL_MCP_TOKEN/);
- assert.match(start,/pathname.startsWith\("\/private_"\)/);
+ assert.match(start,/u.pathname === "\/"/);
 });
