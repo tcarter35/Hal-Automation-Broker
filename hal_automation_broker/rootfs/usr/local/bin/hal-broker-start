@@ -15,10 +15,10 @@ mkdir -p /data; chmod 0700 /data
 umask 077
 node -e '
   const u = new URL(process.env.HAL_MCP_BASE_URL);
-  if (!["http:","https:"].includes(u.protocol) || !u.pathname.startsWith("/private_")) process.exit(2);
+  if (!["http:","https:"].includes(u.protocol) || !u.hostname || u.pathname === "/" || u.username || u.password) process.exit(2);
   const fs = require("node:fs");
   fs.writeFileSync(process.env.HAL_BROKER_MCP_CONFIG,JSON.stringify({mcpServers:{"home-assistant":{baseUrl:u.href}}}));
-' 2>/dev/null || fail 'HAL_MCP_BASE_URL must be the complete HA-MCP private endpoint URL (including port and /private_ path).'
+' 2>/dev/null || fail 'HAL_MCP_BASE_URL must be a complete HTTP(S) MCP URL with a non-root secret endpoint path.'
 if ! mcporter --config "$HAL_BROKER_MCP_CONFIG" list home-assistant --schema --json >/tmp/mcp-schema.json 2>/dev/null; then
  fail 'MCP endpoint/schema preflight failed; verify MCP URL and connectivity; URL was not logged.'
 fi
