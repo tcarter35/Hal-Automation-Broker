@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 fail() { printf '[hal-broker] ERROR: %s\n' "$1" >&2; exit 1; }
-[ -r /config/secrets.env ] || fail 'Missing /config/secrets.env; run guarded provisioning.'
-[ -r /config/mcporter.json ] || fail 'Missing dedicated /config/mcporter.json.'
+[ -r /config/secrets.env ] || fail 'Missing /config/secrets.env; copy private broker credentials into app_configs.'
 set -a; . /config/secrets.env; set +a
-for name in HAL_BROKER_WORKER_TOKEN HAL_BROKER_HA_TOKEN HAL_BROKER_HMAC_KEY HAL_MCP_BASE_URL HAL_MCP_TOKEN HAL_MCP_AUTH_HEADER; do
+for name in HAL_BROKER_WORKER_TOKEN HAL_BROKER_HA_TOKEN HAL_BROKER_HMAC_KEY HAL_MCP_BASE_URL; do
   [ -n "${!name:-}" ] || fail "Missing required config field: ${name}"
 done
 [ "$HAL_BROKER_WORKER_TOKEN" != "$HAL_BROKER_HA_TOKEN" ] || fail 'Worker and HA broker credentials must be distinct.'
-[ "$HAL_MCP_TOKEN" != "$HAL_BROKER_HA_TOKEN" ] || fail 'MCP and HA broker credentials must be distinct.'
-[ "$HAL_MCP_TOKEN" != "$HAL_BROKER_WORKER_TOKEN" ] || fail 'MCP and worker credentials must be distinct.'
+# HA-MCP app authenticates via its unpredictable /private_... URL, not Authorization: Bearer.
+# Never print the endpoint: it is a credential.
 export HAL_BROKER_ALLOW_WRITES=0 HAL_BROKER_BIND=0.0.0.0 HAL_BROKER_PORT=8765
-export HAL_BROKER_STORE=/data/proposals.json HAL_BROKER_MCP_CONFIG=/config/mcporter.json
+export HAL_BROKER_STORE=/data/proposals.json HAL_BROKER_MCP_CONFIG=/tmp/hal-mcporter.json
 mkdir -p /data; chmod 0700 /data
+umask 077
+node -e '
+  const u = new URL(process.env.HAL_MCP_BASE_URL);
+  if (!["http:","https:"].includes(u.protocol) || !u.pathname.startsWith("/private_")) process.exit(2);
+  const fs = require("node:fs");
+  fs.writeFileSync(process.env.HAL_BROKER_MCP_CONFIG,JSON.stringify({mcpServers:{"home-assistant":{baseUrl:u.href}}}));
+' 2>/dev/null || fail 'HAL_MCP_BASE_URL must be the complete HA-MCP private endpoint URL (including port and /private_ path).'
 if ! mcporter --config "$HAL_BROKER_MCP_CONFIG" list home-assistant --schema --json >/tmp/mcp-schema.json 2>/dev/null; then
- fail 'MCP endpoint/schema preflight failed; credentials were not logged.'
+ fail 'MCP endpoint/schema preflight failed; verify MCP URL and connectivity; URL was not logged.'
 fi
 node -e 'const d=require("/tmp/mcp-schema.json");const n=(d.tools||[]).map(x=>x.name);for(const x of ["ha_config_get_automation","ha_search"])if(!n.includes(x))process.exit(2)' 2>/dev/null || fail 'MCP endpoint lacks required read-only tools.'
 rm -f /tmp/mcp-schema.json
